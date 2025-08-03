@@ -1,384 +1,462 @@
-//-------------------------------------------------------
-// mips.v
-// Max Yi (byyi@hmc.edu) and David_Harris@hmc.edu 12/9/03
-// Model of subset of MIPS processor described in Ch 1
-//
-// Matsutani: ADDI instruction is added
-// Matsutani: datapath width is changed to 32-bit
-//-------------------------------------------------------
-
-/* simplified MIPS processor */
-// Modified by Matsutani
-//module mips #(parameter WIDTH = 8, REGBITS = 3) (
-module mips32 #(parameter WIDTH = 32, REGBITS = 3) (
-	input			clk, reset,
-	input [WIDTH-1:0] 	memdata,
-	output			memread, memwrite,
-	output [WIDTH-1:0] 	adr, writedata
+module top(
+	input clk, reset, 
+	output [31:0] writedata, dataadr,
+	output memwrite
 );
-wire [31:0]	instr;
-wire		zero, alusrca, memtoreg, iord, pcen, regwrite, regdst;
-wire [1:0]	aluop, pcsource, alusrcb;
-wire [3:0]	irwrite;
-wire [2:0]	alucont;
-controller cont(clk, reset, instr[31:26], zero, memread, memwrite,
-			alusrca, memtoreg, iord, pcen, regwrite, regdst,
-			pcsource, alusrcb, aluop, irwrite);
-alucontrol ac(aluop, instr[5:0], alucont);
-datapath #(WIDTH, REGBITS) dp(clk, reset, memdata, alusrca, memtoreg,
-			iord, pcen, regwrite, regdst, pcsource, alusrcb,
-			irwrite, alucont, zero, instr, adr, writedata);
+	wire [31:0] pc, instr, readdata;
+
+	mips mips(clk, reset, pc, instr, memwrite, dataadr, writedata, readdata);
+	imem imem(pc[7:2], instr);
+	dmem dmem(clk, memwrite, dataadr, writedata, readdata);
 endmodule
 
-/* controller */
-module controller (
-	input			clk, reset,
-	input [5:0]		op,
-	input			zero,
-	output reg		memread, memwrite, alusrca, memtoreg, iord,
-	output			pcen,
-	output reg		regwrite, regdst,
-	output reg [1:0]	pcsource, alusrcb, aluop,
-	output reg [3:0]	irwrite
+module dmem(
+	input clk, we,
+	input [31:0] a, wd,
+	output [31:0] rd
 );
-parameter FETCH1  = 4'b0001;
-parameter FETCH2  = 4'b0010;
-parameter FETCH3  = 4'b0011;
-parameter FETCH4  = 4'b0100;
-parameter DECODE  = 4'b0101;
-parameter MEMADR  = 4'b0110;
-parameter LBRD    = 4'b0111;
-parameter LBWR    = 4'b1000;
-parameter SBWR    = 4'b1001;
-parameter RTYPEEX = 4'b1010;
-parameter RTYPEWR = 4'b1011;
-parameter BEQEX   = 4'b1100;
-parameter JEX     = 4'b1101;
-parameter ADDIEX  = 4'b1110;
-parameter ADDIWR  = 4'b1111;
-parameter LB      = 6'b100000;
-parameter SB      = 6'b101000;
-// Added by Matsutani
-parameter LW      = 6'b100011;
-parameter SW      = 6'b101011;
-//
-parameter RTYPE   = 6'b0;
-parameter BEQ     = 6'b000100;
-parameter ADDI    = 6'b001000;
-parameter J       = 6'b000010;
-reg [3:0]	state, nextstate;
-reg		pcwrite, pcwritecond;
-// state register
-always @(posedge clk)
-	if (reset) state <= FETCH1;
-	else state <= nextstate;
-// next state logic
-always @(*) begin
-	case (state)
-		// Modified by Matsutani
-		//FETCH1:	nextstate <= FETCH2;
-		FETCH1:	nextstate <= DECODE;
-		//FETCH2:	nextstate <= FETCH3;
-		//FETCH3:	nextstate <= FETCH4;
-		//FETCH4:	nextstate <= DECODE;
-		DECODE:	case (op)
-			LB:	nextstate <= MEMADR;
-			SB:	nextstate <= MEMADR;
-			// Added by Matsutani
-			LW:	nextstate <= MEMADR;
-			SW:	nextstate <= MEMADR;
-			//
-			RTYPE:	nextstate <= RTYPEEX;
-			BEQ:	nextstate <= BEQEX;
-			ADDI:	nextstate <= ADDIEX;
-			J:	nextstate <= JEX;
-			default:nextstate <= FETCH1; // should never happen
+	reg [31:0] RAM[63:0];
+	
+	assign rd = RAM[a[31:2]]; // ワードを読み込む(アドレスの上位３０ビットを使用（ワードアラインメント)
+
+	always @(posedge clk) begin
+		if (we) begin
+			RAM[a[31:2]] <= wd; // クロック立ち上がりでwrite enableのときにワードを書き込む
+		end
+	end
+endmodule
+
+module imem(
+	input [5:0] a,
+	output [31:0] rd
+);
+	reg [31:0] RAM[63:0];
+
+	initial
+		begin
+			$readmemh("memfile.dat", RAM);
+		end
+
+	assign rd = RAM[a]; // 先頭６ビットを読む(オペコード)
+endmodule
+
+
+module mips(
+	input clk, reset,
+	output [31:0] pcF,
+	input [31:0] instrF,
+	output memwriteM,
+	output [31:0] aluoutM, writedataM,
+	input [31:0] readdataM
+);
+	// F=Fetch, D=Decode, E=Execute, M=Memory, W=Writeback
+	wire [5:0] opD, functD;
+	wire regdstE, alusrcE, pcsrcD, memtoregE, memtoregM, memtoregW, regwriteE, regwriteM, regwriteW;
+	wire [2:0] alucontrolE;
+	wire flushE, equalD;
+
+	controller c(
+		clk, reset, opD, functD, flushE, equalD,
+		memtoregE, memtoregM, memtoregW, memwriteM, pcsrcD, branchD,
+		alusrcE, regdstE, regwriteE, regwriteM, regwriteW, jumpE,
+		alucontrolE
+	);
+	
+	datapath dp(
+		clk, reset, memtoregE, memtoregM, memtoregW, pcsrcD, branchD,
+		alusrcE, regdstE, regwriteE, regwriteM, regwriteW, jumpD,
+		alucontrolE,
+		equalD, pcF, instrF,
+		aluoutM, writedataM, readdataM,
+		opD, functD, flushE
+	);
+endmodule
+
+
+module controller(
+	input clk, reset,
+	input [5:0] opD, functD,
+	input flushE, equalD,
+	output	memtoregE, memtoregM, memtoregW, memwriteM,
+	output       pcsrcD, branchD, alusrcE,
+	output       regdstE, regwriteE, regwriteM, regwriteW,
+	output       jumpD,
+	output [2:0] alucontrolEoutput	
+);
+	wire [1:0] aluopD;
+
+	wire	memtoregD, memwriteD, alusrcD,
+			regdstD, regwriteD;
+	wire [2:0] alucontrolD;
+	wire	memwriteE;
+	
+	maindec md(
+		opD, memtoregD, memwriteD, branchD,
+		alusrcD, regdstD, regwriteD, jumpD,
+		aluopD
+	);
+	
+	aludec	ad(functD, aluopD, alucontrolD);
+
+	assign pcsrcD = branchD & equalD;
+
+	// パイプラインレジスタ
+	floprc #(8) regE(
+		clk, reset, flushE,
+		{memtoregD, memwriteD, alusrcD, regdstD, regwriteD, alucontrolD}, 
+		{memtoregE, memwriteE, alusrcE, regdstE, regwriteE,  alucontrolE}
+	);
+	flopr #(3) regM(
+		clk, reset, 
+		{memtoregE, memwriteE, regwriteE},
+		{memtoregM, memwriteM, regwriteM}
+	);
+	flopr #(2) regW(
+		clk, reset,
+		{memtoregM, regwriteM}, 
+		{memtoregW, regwriteW}
+	);
+endmodule
+
+module maindec(
+	input	[5:0] op,
+	output	memtoreg, memwrite,
+	output	branch, alusrc,
+	output	regdst, regwrite,
+	output	jump,
+	output	[1:0] aluop
+);
+	reg [9:0] controls;
+	
+	// 制御信号をセット
+	assign {
+		regwrite, regdst, alusrc,
+		branch, memwrite,
+		memtoreg, jump, aluop
+	} = controls;
+
+	// 分岐命令やロード命令などをデコード
+	always @(*) begin
+		case(op)
+			6'b000000: controls <= 9'b110000010; //Rtyp
+			6'b100011: controls <= 9'b101001000; //LW
+			6'b101011: controls <= 9'b001010000; //SW
+			6'b000100: controls <= 9'b000100001; //BEQ
+			6'b001000: controls <= 9'b101000000; //ADDI
+			6'b000010: controls <= 9'b000000100; //J
+			default:   controls <= 9'bxxxxxxxxx; //???
 		endcase
-		MEMADR: case (op)
-			LB:	nextstate <= LBRD;
-			SB:	nextstate <= SBWR;
-			// Added by Matsutani
-			LW:	nextstate <= LBRD;
-			SW:	nextstate <= SBWR;
-			//
-			default:nextstate <= FETCH1; // should never happen
+	end
+endmodule
+		
+module aludec(
+	input	[5:0] funct,
+	input	[1:0] aluop,
+	output reg	[2:0] alucontrol
+);
+	// ALUで行う演算命令をデコード
+	always @(*) begin
+		case(aluop)
+		2'b00: alucontrol <= 3'b010;  // add
+		2'b01: alucontrol <= 3'b110;  // sub
+		default: case(funct)          // RTYPE
+			6'b100000: alucontrol <= 3'b010; // ADD
+			6'b100010: alucontrol <= 3'b110; // SUB
+			6'b100100: alucontrol <= 3'b000; // AND
+			6'b100101: alucontrol <= 3'b001; // OR
+			6'b101010: alucontrol <= 3'b111; // SLT
+			default:   alucontrol <= 3'bxxx; // ???
+			endcase
 		endcase
-		LBRD:	nextstate <= LBWR;
-		LBWR:	nextstate <= FETCH1;
-		SBWR:	nextstate <= FETCH1;
-		RTYPEEX:nextstate <= RTYPEWR;
-		RTYPEWR:nextstate <= FETCH1;
-		BEQEX:	nextstate <= FETCH1;
-		JEX:	nextstate <= FETCH1;
-		ADDIEX: nextstate <= ADDIWR;
-		ADDIWR:	nextstate <= FETCH1;
-		default:nextstate <= FETCH1; // should never happen
-	endcase
-end
-always @(*) begin
-	// set all outputs to zero,
-	// then conditionally assert just the appropriate ones
-	irwrite <= 4'b0000;
-	pcwrite <= 0; pcwritecond <= 0;
-	regwrite <= 0; regdst <= 0;
-	memread <= 0; memwrite <= 0;
-	alusrca <= 0; alusrcb <= 2'b00; aluop <= 2'b00;
-	pcsource <= 2'b00;
-	iord <= 0; memtoreg <= 0;
-	case (state)
-		FETCH1: begin
-			memread <= 1;
-			irwrite <= 4'b1000;
-			alusrcb <= 2'b01;
-			pcwrite <= 1;
-		end
-		FETCH2: begin
-			memread <= 1;
-			irwrite <= 4'b0100;
-			alusrcb <= 2'b01;
-			pcwrite <= 1;
-		end
-		FETCH3: begin
-			memread <= 1;
-			irwrite <= 4'b0010;
-			alusrcb <= 2'b01;
-			pcwrite <= 1;
-		end
-		FETCH4: begin
-			memread <= 1;
-			irwrite <= 4'b0001;
-			alusrcb <= 2'b01;
-			pcwrite <= 1;
-		end
-		DECODE: alusrcb <= 2'b11;
-		MEMADR: begin
-			alusrca <= 1;
-			alusrcb <= 2'b10;
-		end
-		LBRD: begin
-			memread <= 1;
-			iord    <= 1;
-		end
-		LBWR: begin
-			regwrite <= 1;
-			memtoreg <= 1;
-		end
-		SBWR: begin
-			memwrite <= 1;
-			iord     <= 1;
-		end
-		RTYPEEX: begin
-			alusrca <= 1;
-			aluop   <= 2'b10;
-		end
-		RTYPEWR: begin
-			regdst   <= 1;
-			regwrite <= 1;
-		end
-		BEQEX: begin
-			alusrca     <= 1;
-			aluop       <= 2'b01;
-			pcwritecond <= 1;
-			pcsource    <= 2'b01;
-		end
-		JEX: begin
-			pcwrite  <= 1;
-			pcsource <= 2'b10;
-		end
-		ADDIEX: begin
-			alusrca <= 1;
-			alusrcb <= 2'b10;
-		end
-		ADDIWR: begin
-			regdst   <= 0;
-			regwrite <= 1;
-		end
-	endcase
-end
-assign pcen = pcwrite | (pcwritecond & zero); // program counter enable
+	end
+endmodule
+	
+
+module datapath(
+	input         clk, reset,
+	input         memtoregE, memtoregM, memtoregW, 
+	input         pcsrcD, branchD,
+	input         alusrcE, regdstE,
+	input         regwriteE, regwriteM, regwriteW, 
+	input         jumpD,
+	input  [2:0]  alucontrolE,
+	output        equalD,
+	output [31:0] pcF,
+	input  [31:0] instrF,
+	output [31:0] aluoutM, writedataM,
+	input  [31:0] readdataM,
+	output [5:0]  opD, functD,
+	output        flushE
+);
+	// フォワーディング信号とレジスタ番号、ストール制御信号
+	wire        forwardaD, forwardbD;
+	wire [1:0]  forwardaE, forwardbE;
+	wire        stallF;
+	wire [4:0]  rsD, rtD, rdD, rsE, rtE, rdE;
+	wire [4:0]  writeregE, writeregM, writeregW;
+	wire        flushD;
+	// パイプラインの 各ステージの データ信号
+	wire [31:0] pcnextFD, pcnextbrFD, pcplus4F, pcbranchD;
+	wire [31:0] signimmD, signimmE, signimmshD;
+	wire [31:0] srcaD, srca2D, srcaE, srca2E;
+	wire [31:0] srcbD, srcb2D, srcbE, srcb2E, srcb3E;
+	wire [31:0] pcplus4D, instrD;
+	wire [31:0] aluoutE, aluoutW;
+	wire [31:0] readdataW, resultW;
+
+	// ハザード検知
+	hazard h(
+		rsD, rtD, rsE, rtE, writeregE, writeregM, writeregW, 
+		regwriteE, regwriteM, regwriteW, 
+		memtoregE, memtoregM, branchD,
+		forwardaD, forwardbD, forwardaE, forwardbE,
+		stallF, stallD, flushE
+	);
+
+	// PC更新の選択（PC+4 / 分岐先 / ジャンプ先  のいずれかから選択)
+	mux2 #(32) pcbrmux(pcplus4F, pcbranchD, pcsrcD, pcnextbrFD);
+	// ジャンプ先アドレス（PC上位４ビット＋命令の下位２６ビット＋00）
+	mux2 #(32) pcmux(
+		pcnextbrFD,{pcplus4D[31:28], instrD[25:0], 2'b00}, 
+        jumpD, pcnextFD
+	);
+
+	// レジスタファイル（readポート２つ、writeポート１つ）
+	regfile rf(
+		clk, regwriteW, rsD, rtD, writeregW,
+		resultW, srcaD, srcbD
+	);
+
+	// Fetchステージ
+	flopenr #(32) pcreg(clk, reset, ~stallF, pcnextFD, pcF);
+  	adder       pcadd1(pcF, 32'b100, pcplus4F);
+
+	// Decodeステージ
+	flopenr #(32) r1D(clk, reset, ~stallD, pcplus4F, pcplus4D);
+	flopenrc #(32) r2D(clk, reset, ~stallD, flushD, instrF, instrD);
+	signext     se(instrD[15:0], signimmD);
+	sl2         immsh(signimmD, signimmshD);
+	adder       pcadd2(pcplus4D, signimmshD, pcbranchD);
+	mux2 #(32)  forwardadmux(srcaD, aluoutM, forwardaD, srca2D);
+	mux2 #(32)  forwardbdmux(srcbD, aluoutM, forwardbD, srcb2D);
+	eqcmp       comp(srca2D, srcb2D, equalD);
+
+		// 命令のデコード
+	assign opD = instrD[31:26];
+	assign functD = instrD[5:0];
+	assign rsD = instrD[25:21];
+	assign rtD = instrD[20:16];
+	assign rdD = instrD[15:11];
+
+	assign flushD = pcsrcD | jumpD;
+
+	// Execute-ステージ
+	floprc #(32) r1E(clk, reset, flushE, srcaD, srcaE);
+	floprc #(32) r2E(clk, reset, flushE, srcbD, srcbE);
+	floprc #(32) r3E(clk, reset, flushE, signimmD, signimmE);
+	floprc #(5)  r4E(clk, reset, flushE, rsD, rsE);
+	floprc #(5)  r5E(clk, reset, flushE, rtD, rtE);
+	floprc #(5)  r6E(clk, reset, flushE, rdD, rdE);
+	mux3 #(32)  forwardaemux(srcaE, resultW, aluoutM, forwardaE, srca2E);
+	mux3 #(32)  forwardbemux(srcbE, resultW, aluoutM, forwardbE, srcb2E);
+		// ALUの第２oオペラんdの選択
+	mux2 #(32)  srcbmux(srcb2E, signimmE, alusrcE, srcb3E);
+		// 演算の 実行
+	alu         alu(srca2E, srcb3E, alucontrolE, aluoutE);
+		// 書き込みレジスタの選択
+	mux2 #(5)   wrmux(rtE, rdE, regdstE, writeregE);
+
+	// Memoryステージ
+	flopr #(32) r1M(clk, reset, srcb2E, writedataM);
+	flopr #(32) r2M(clk, reset, aluoutE, aluoutM);
+	flopr #(32) r3M(clk, reset, writeregE, writeregM);
+
+	// Writebackステージ
+	flopr #(32) r1W(clk, reset, aluoutM, aluoutW);
+	flopr #(32) r2W(clk, reset, readdataM, readdataW);
+	flopr #(5)  r3W(clk, reset, writeregM, writeregW);
+		// レジスタに書き込む データの選択
+	mux2 #(32)  resmux(aluoutW, readdataW, memtoregW, resultW);
 endmodule
 
-/* alucontrol */
-module alucontrol (
-	input [1:0]		aluop,
-	input [5:0]		funct,
-	output reg [2:0]	alucont
+module hazard(
+	input  [4:0] rsD, rtD, rsE, rtE, 
+	input  [4:0] writeregE, writeregM, writeregW,
+	input        regwriteE, regwriteM, regwriteW,
+	input        memtoregE, memtoregM, branchD,
+	output           forwardaD, forwardbD,
+	output reg [1:0] forwardaE, forwardbE,
+	output       stallF, stallD, flushE
 );
-always @(*)
-	case (aluop)
-		2'b00:	alucont <= 3'b010; // add for lb/sb/addi
-		2'b01:	alucont <= 3'b110; // sub (for beq)
-		default: case (funct) // R-Type instructions
-			6'b100000: alucont <= 3'b010; // add (for add)
-			6'b100010: alucont <= 3'b110; // subtract (for sub)
-			6'b100100: alucont <= 3'b000; // logical and (for and)
-			6'b100101: alucont <= 3'b001; // logical or (for or)
-			6'b101010: alucont <= 3'b111; // set on less (for slt)
-			default:   alucont <= 3'b101; // should never happen
+	wire lwstallD, branchstallD;
+	
+	// Decodeステージのフォワーディング検出
+	assign forwardaD = (rsD != 0 & rsD == writeregM & regwriteM);
+	assign forwardbD = (rtD != 0 & rtD == writeregM & regwriteM)
+
+	// Executeステージのフォw−ディング制御
+	always @(*) begin
+		forwardaE = 2'b00; forwardbE = 2'b00;
+		if (rsE != 0)
+			if (rsE == writeregM & regwriteM) forwardaE = 2'b10;
+			else if (rsE == writeregW & regwriteW) forwardaE = 2'b01;
+		if (rtE != 0)
+			if (rtE == writeregM & regwriteM) forwardbE = 2'b10;
+			else if (rtE == writeregW & regwriteW) forwardbE = 2'b01;
+	end
+
+	// ストール
+	assign #1 lwstallD = memtoregE & (rtE == rsD | rtE == rtD);
+	assign #1 branchstallD = branchD & (
+		regwriteE & (writeregE == rsD | writeregE == rtD) | 
+		memtoregM & (writeregM == rsD | writeregM == rtD)
+	);
+
+	assign #1 stallD = lwstallD | branchstallD;
+	assign #1 stallF = stallD; // Dでのストールはそれ以前のステージにもストールを起こす
+	assign #1 flushE = stallD; // Dでのストールが起きたら次のステージをフラッシュする
+
+
+endmodule
+
+
+module alu(
+	input	[31:0] a, b,
+	input	[2:0] alucont,
+	output reg [31:0] result
+);
+	wire [31:0] b2, sum, slt;
+
+	// 減算のaときは補数をとる
+	assign #1 b2 = alucont[2] ? ~b : b;
+	assign #1 sum = a + b2 + alucont[2];
+	// slt命令用の符号ビットを抽出
+	assign #1 slt = sum[31];
+
+	// 制御信号に応じて演算
+	always@(*) begin
+		case(alucont[1:0])
+			2'b00: result <= #1 a & b;
+			2'b01: result <= #1 a | b;
+			2'b10: result <= #1 sum;
+			2'b11: result <= #1 slt;
 		endcase
-	endcase
+	end
 endmodule
+	
 
-/* datapath */
-module datapath #(parameter WIDTH = 8, REGBITS = 3) (
-	input			clk, reset,
-	input [WIDTH-1:0]	memdata,
-	input			alusrca, memtoreg, iord, pcen, regwrite, regdst,
-	input [1:0]		pcsource, alusrcb,
-	input [3:0]		irwrite,
-	input [2:0]		alucont,
-	output			zero,
-	output [31:0]		instr,
-	output [WIDTH-1:0]	adr, writedata
+module regfile(
+	input	clk, 
+	input	we3,
+	// 3ポート(readポート２つ、writeポート１つ)
+	input	[4:0]	ra1, ra2, wa3,
+	input	[31:0]	wd3,
+	output	[31:0]	rd1, rd2
 );
-// the size of the parameters must be changed to match the WIDTH parameter
-// Modified by Matsutani
-//parameter CONST_ZERO = 8'b0;
-//parameter CONST_ONE = 8'b1;
-parameter CONST_ZERO = 32'b0;
-parameter CONST_ONE = 32'b1;
-parameter CONST_FOUR = 32'b100;
-//
-wire [REGBITS-1:0] ra1, ra2, wa;
-wire [WIDTH-1:0] pc, nextpc, md, rd1, rd2, wd, a, src1, src2, aluresult,
-			aluout, constx4;
-// shift left constant field by 2
-// Modified by Matsutani
-//assign constx4 = {instr[WIDTH-3:0], 2'b00};
-assign constx4 = {instr[16-3:0], 2'b00};
-//
-// register file address fields
-assign ra1 = instr[REGBITS+20:21];
-assign ra2 = instr[REGBITS+15:16];
-mux2 #(REGBITS) regmux(instr[REGBITS+15:16], instr[REGBITS+10:11], regdst, wa);
-// independent of bit width, 
-// load instruction into four 8-bit registers over four cycles
-// Modified by Matsutani
-//flopen #(8) ir0(clk, irwrite[0], memdata[7:0], instr[7:0]);
-//flopen #(8) ir1(clk, irwrite[1], memdata[7:0], instr[15:8]);
-//flopen #(8) ir2(clk, irwrite[2], memdata[7:0], instr[23:16]);
-//flopen #(8) ir3(clk, irwrite[3], memdata[7:0], instr[31:24]);
-flopen #(32) ir(clk, irwrite[3], memdata[31:0], instr[31:0]);
-//
-// datapath
-flopenr #(WIDTH) pcreg(clk, reset, pcen, nextpc, pc);
-flop #(WIDTH) mdr(clk, memdata, md);
-flop #(WIDTH) areg(clk, rd1, a);
-flop #(WIDTH) wrd(clk, rd2, writedata);
-flop #(WIDTH) res(clk, aluresult, aluout);
-mux2 #(WIDTH) adrmux(pc, aluout, iord, adr);
-mux2 #(WIDTH) src1mux(pc, a, alusrca, src1);
-// Modified by Matsutani
-//mux4 #(WIDTH) src2mux(writedata, CONST_ONE, instr[WIDTH-1:0], constx4, 
-//			alusrcb, src2);
-mux4 #(WIDTH) src2mux(writedata, CONST_FOUR, {{16{instr[15]}}, instr[15:0]},
-			{{16{constx4[15]}}, constx4[15:0]}, alusrcb, src2);
-//
-mux4 #(WIDTH) pcmux(aluresult, aluout, constx4, CONST_ZERO, pcsource, nextpc);
-mux2 #(WIDTH) wdmux(aluout, md, memtoreg, wd);
-regfile #(WIDTH,REGBITS) rf(clk, regwrite, ra1, ra2, wa, wd, rd1, rd2);
-alu #(WIDTH) alunit(src1, src2, alucont, aluresult);
-zerodetect #(WIDTH) zd(aluresult, zero);
+	// 32個の３２ビットレジスタ配列
+	reg [31:0] rf[31:0];
+
+	//  クロックのi立ちさがrで書き込み
+	always @(negedge clk) begin
+		if (we3) rf[wa3] <= wd3;
+	end
+
+	// レジスタ０は つねに０
+	assign #1 rd1 = (ra1 != 0) ? rf[ra1] : 0;
+	assign #1 rd2 = (ra2 != 0) ? rf[ra2] : 0;
 endmodule
 
-/* alu */
-module alu #(parameter WIDTH = 8) (
-	input [WIDTH-1:0]	a, b,
-	input [2:0]		alucont,
-	output reg [WIDTH-1:0]	result
+	
+
+module adder(
+	input	[31:0] a,
+	output	[31:0] y
 );
-wire [WIDTH-1:0]	b2, sum, slt;
-assign b2 = alucont[2] ? ~b : b; 
-assign sum = a + b2 + alucont[2];
-// slt should be 1 if most significant bit of sum is 1
-assign slt = sum[WIDTH-1];
-always @(*)
-	case (alucont[1:0])
-		2'b00:	result <= a & b;
-		2'b01:	result <= a | b;
-		2'b10:	result <= sum;
-		2'b11:	result <= slt;
-	endcase
+	assign #1 y = a + b;
 endmodule
 
-/* regfile */
-module regfile #(parameter WIDTH = 8, REGBITS = 3) (
-	input			clk,
-	input			regwrite,
-	input [REGBITS-1:0]	ra1, ra2, wa,
-	input [WIDTH-1:0]	wd,
-	output [WIDTH-1:0]	rd1, rd2
+module eqnmp(
+	input	[31:0] a, b,
+	output	eq
 );
-reg [WIDTH-1:0] RAM [(1<<REGBITS)-1:0];
-// three ported register file
-// read two ports combinationally
-// write third port on rising edge of clock
-// register 0 hardwired to 0
-always @(posedge clk)
-	if (regwrite) RAM[wa] <= wd;
-assign rd1 = ra1 ? RAM[ra1] : 0;
-assign rd2 = ra2 ? RAM[ra2] : 0;
+	assign #1 eq = (a == b);
 endmodule
 
-/* zerodetect */
-module zerodetect #(parameter WIDTH = 8) (
-	input [WIDTH-1:0]	a,
-	output			y
+module sl2(
+	input	[31:0] a,
+	output	[31:0] y
 );
-assign y = (a == 0);
+	// ２ビット左シフト
+	assign #1 y = {a[29:0], 2'b00};
 endmodule
 
-/* flop */
-module flop #(parameter WIDTH = 8) (
-	input			clk,
-	input [WIDTH-1:0]	d,
-	output reg [WIDTH-1:0]	q
+module signext(
+	input	[15:0] a,
+	output	[15:0] y
 );
-always @(posedge clk)
-	q <= d;
+	// 符号拡張
+	assign #1 y = {{16{a[15]}}, a};
 endmodule
 
-/* flopen */
-module flopen #(parameter WIDTH = 8) (
-	input			clk, en,
-	input [WIDTH-1:0]	d,
-	output reg [WIDTH-1:0]	q
+
+// フリップフロップ
+
+// 基本的なフリップフロップ
+module flopr #(parameter WIDTH = 8) (
+	input	clk, reset,
+	input	[WIDTH-1:0] d,
+	output reg	[WIDTH-1:0] q,
 );
-always @(posedge clk)
-	if (en) q <= d;
-endmodule
+	always @(posedge clk, posedge reset) begin
+		if (reset) q <= #1 0; // reset信号で０にクリア
+		else	q <= #1 d;
+	end
+endmodule	
 
-/* flopenr */
-module flopenr #(parameter WIDTH = 8) (
-	input			clk, reset, en,
-	input [WIDTH-1:0]	d,
-	output reg [WIDTH-1:0]	q
+//　イネーブル付きフリップフロップ
+module flopenr #(parameter WIDTH = 8)(
+	input                  clk, reset,
+	input                  en,
+	input      [WIDTH-1:0] d, 
+	output reg [WIDTH-1:0] q
 );
-always @(posedge clk)
-	if (reset) q <= 0;
-	else if (en) q <= d;
+	always @(posedge clk, posedge reset) begin
+		if (reset) q <= #1 0;
+		else if (en) q <= #1 d;
+	end
 endmodule
 
-/* mux2 */
+//　クリア 機能付きフリップフロップ
+module flopenrc #(parameter WIDTH = 8)(
+	input                  clk, reset,
+	input                  en, clear,
+	input      [WIDTH-1:0] d, 
+	output reg [WIDTH-1:0] q
+);
+	always @(posedge clk, posedge reset) begin
+		if (reset) q <= #1 0;
+		else if (clear) q <= #1 0;
+		else if (en) q <= #1 d;
+	end
+endmodule
+
+
+// マルチプレクサ
+
+// ２入力
 module mux2 #(parameter WIDTH = 8) (
-	input [WIDTH-1:0]	d0, d1,
-	input			s,
-	output [WIDTH-1:0]	y
+	input	[WIDTH-1:0] d0, d1,
+	input	s,
+	output	[WIDTH-1:0] y
 );
-assign y = s ? d1 : d0;
+	assign #1 y = s ? d1 : d0;
 endmodule
-
-/* mux4 */
-module mux4 #(parameter WIDTH = 8) (
-	input [WIDTH-1:0]	d0, d1, d2, d3,
-	input [1:0]		s,
-	output reg [WIDTH-1:0] 	y
+	
+// 3入力
+module mux3 #(parameter WIDTH = 8) (
+	input	[WIDTH-1:0] d0, d1, d2,
+	input	s,
+	output	[WIDTH-1:0] y
 );
-always @(*)
-	case (s)
-		2'b00:	y <= d0;
-		2'b01:	y <= d1;
-		2'b10:	y <= d2;
-		2'b11:	y <= d3;
-	endcase
+	assign #1 y = s[1] ? d2 : (s[0] ? d1 : d0);
 endmodule
