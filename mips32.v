@@ -369,7 +369,7 @@ endmodule
 	
 
 module adder(
-	input	[31:0] a,
+	input	[31:0] a, b,
 	output	[31:0] y
 );
 	assign #1 y = a + b;
@@ -405,7 +405,7 @@ endmodule
 module flopr #(parameter WIDTH = 8) (
 	input	clk, reset,
 	input	[WIDTH-1:0] d,
-	output reg	[WIDTH-1:0] q,
+	output reg	[WIDTH-1:0] q
 );
 	always @(posedge clk, posedge reset) begin
 		if (reset) q <= #1 0; // reset信号で０にクリア
