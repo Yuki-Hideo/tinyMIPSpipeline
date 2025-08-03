@@ -292,7 +292,7 @@ module hazard(
 	
 	// Decodeステージのフォワーディング検出
 	assign forwardaD = (rsD != 0 & rsD == writeregM & regwriteM);
-	assign forwardbD = (rtD != 0 & rtD == writeregM & regwriteM)
+	assign forwardbD = (rtD != 0 & rtD == writeregM & regwriteM);
 
 	// Executeステージのフォw−ディング制御
 	always @(*) begin

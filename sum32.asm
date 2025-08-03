@@ -1,7 +1,7 @@
 # sum32.asm
 main:
 	addi $3, $0, 0    # s = 0
-	addi $4, $0, 100   # i = 100
+	addi $4, $0, 1000   # i = 1000
 loop:
 	beq $4, $0, end   # done with loop i = 0
 	add $3, $3, $4	  # s += i
