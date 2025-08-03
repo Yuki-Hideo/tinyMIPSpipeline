@@ -41,7 +41,7 @@ module imem(
 endmodule
 
 
-module mips(
+module mips32(
 	input clk, reset,
 	output [31:0] pcF,
 	input [31:0] instrF,
