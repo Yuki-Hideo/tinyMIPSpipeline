@@ -1,8 +1,15 @@
 //-------------------------------------------------------
-// mips32.v - Fixed version
-// パイプライン化されたMIPS32プロセッサの修正版
+// mips.v
+// Max Yi (byyi@hmc.edu) and David_Harris@hmc.edu 12/9/03
+// Model of subset of MIPS processor described in Ch 1
+//
+// Matsutani: ADDI instruction is added
+// Matsutani: datapath width is changed to 32-bit
 //-------------------------------------------------------
 
+/* simplified MIPS processor */
+// Modified by Matsutani
+//module mips #(parameter WIDTH = 8, REGBITS = 3) (
 module mips32 #(parameter WIDTH = 32, REGBITS = 3) (
 	input			clk, reset,
 	input [WIDTH-1:0] 	memdata,
@@ -14,17 +21,16 @@ wire		zero, alusrca, memtoreg, iord, pcen, regwrite, regdst;
 wire [1:0]	aluop, pcsource, alusrcb;
 wire [3:0]	irwrite;
 wire [2:0]	alucont;
-wire		memwrite_internal;
-controller cont(clk, reset, instr[31:26], zero, memread, memwrite_internal,
-			   alusrca, memtoreg, iord, pcen, regwrite, regdst,
-			   pcsource, alusrcb, aluop, irwrite);
+controller cont(clk, reset, instr[31:26], zero, memread, memwrite,
+			alusrca, memtoreg, iord, pcen, regwrite, regdst,
+			pcsource, alusrcb, aluop, irwrite);
 alucontrol ac(aluop, instr[5:0], alucont);
 datapath #(WIDTH, REGBITS) dp(clk, reset, memdata, alusrca, memtoreg,
-			   iord, pcen, regwrite, regdst, pcsource, alusrcb,
-			   irwrite, alucont, zero, instr, adr, writedata, memwrite_internal, memwrite);
+			iord, pcen, regwrite, regdst, pcsource, alusrcb,
+			irwrite, alucont, zero, instr, adr, writedata);
 endmodule
 
-/* simplified controller for pipelined processor */
+/* controller */
 module controller (
 	input			clk, reset,
 	input [5:0]		op,
@@ -35,55 +41,161 @@ module controller (
 	output reg [1:0]	pcsource, alusrcb, aluop,
 	output reg [3:0]	irwrite
 );
-
-// パイプライン用の簡略化されたコントローラー
-// 常にPC更新を有効にし、命令フェッチを継続
-assign pcen = 1'b1;
-
-// 制御信号は命令の種類に応じて設定
+parameter FETCH1  = 4'b0001;
+parameter FETCH2  = 4'b0010;
+parameter FETCH3  = 4'b0011;
+parameter FETCH4  = 4'b0100;
+parameter DECODE  = 4'b0101;
+parameter MEMADR  = 4'b0110;
+parameter LBRD    = 4'b0111;
+parameter LBWR    = 4'b1000;
+parameter SBWR    = 4'b1001;
+parameter RTYPEEX = 4'b1010;
+parameter RTYPEWR = 4'b1011;
+parameter BEQEX   = 4'b1100;
+parameter JEX     = 4'b1101;
+parameter ADDIEX  = 4'b1110;
+parameter ADDIWR  = 4'b1111;
+parameter LB      = 6'b100000;
+parameter SB      = 6'b101000;
+// Added by Matsutani
+parameter LW      = 6'b100011;
+parameter SW      = 6'b101011;
+//
+parameter RTYPE   = 6'b0;
+parameter BEQ     = 6'b000100;
+parameter ADDI    = 6'b001000;
+parameter J       = 6'b000010;
+reg [3:0]	state, nextstate;
+reg		pcwrite, pcwritecond;
+// state register
+always @(posedge clk)
+	if (reset) state <= FETCH1;
+	else state <= nextstate;
+// next state logic
 always @(*) begin
-	// デフォルト値
-	memread = 1'b1;    // 常に命令フェッチ
-	memwrite = 1'b0;
-	alusrca = 1'b0;
-	memtoreg = 1'b0;
-	iord = 1'b0;       // 命令フェッチ用
-	regwrite = 1'b0;
-	regdst = 1'b0;
-	pcsource = 2'b00;  // PC+4
-	alusrcb = 2'b01;   // +4 for PC increment
-	aluop = 2'b00;
-	irwrite = 4'b1111; // 命令レジスタ更新
-	
-	// 命令に応じた制御信号（簡略化）
-	case (op)
-		6'b000000: begin // R-type
-			regwrite = 1'b1;
-			regdst = 1'b1;
-			aluop = 2'b10;
+	case (state)
+		// Modified by Matsutani
+		//FETCH1:	nextstate <= FETCH2;
+		FETCH1:	nextstate <= DECODE;
+		//FETCH2:	nextstate <= FETCH3;
+		//FETCH3:	nextstate <= FETCH4;
+		//FETCH4:	nextstate <= DECODE;
+		DECODE:	case (op)
+			LB:	nextstate <= MEMADR;
+			SB:	nextstate <= MEMADR;
+			// Added by Matsutani
+			LW:	nextstate <= MEMADR;
+			SW:	nextstate <= MEMADR;
+			//
+			RTYPE:	nextstate <= RTYPEEX;
+			BEQ:	nextstate <= BEQEX;
+			ADDI:	nextstate <= ADDIEX;
+			J:	nextstate <= JEX;
+			default:nextstate <= FETCH1; // should never happen
+		endcase
+		MEMADR: case (op)
+			LB:	nextstate <= LBRD;
+			SB:	nextstate <= SBWR;
+			// Added by Matsutani
+			LW:	nextstate <= LBRD;
+			SW:	nextstate <= SBWR;
+			//
+			default:nextstate <= FETCH1; // should never happen
+		endcase
+		LBRD:	nextstate <= LBWR;
+		LBWR:	nextstate <= FETCH1;
+		SBWR:	nextstate <= FETCH1;
+		RTYPEEX:nextstate <= RTYPEWR;
+		RTYPEWR:nextstate <= FETCH1;
+		BEQEX:	nextstate <= FETCH1;
+		JEX:	nextstate <= FETCH1;
+		ADDIEX: nextstate <= ADDIWR;
+		ADDIWR:	nextstate <= FETCH1;
+		default:nextstate <= FETCH1; // should never happen
+	endcase
+end
+always @(*) begin
+	// set all outputs to zero,
+	// then conditionally assert just the appropriate ones
+	irwrite <= 4'b0000;
+	pcwrite <= 0; pcwritecond <= 0;
+	regwrite <= 0; regdst <= 0;
+	memread <= 0; memwrite <= 0;
+	alusrca <= 0; alusrcb <= 2'b00; aluop <= 2'b00;
+	pcsource <= 2'b00;
+	iord <= 0; memtoreg <= 0;
+	case (state)
+		FETCH1: begin
+			memread <= 1;
+			irwrite <= 4'b1000;
+			alusrcb <= 2'b01;
+			pcwrite <= 1;
 		end
-		6'b001000: begin // ADDI
-			regwrite = 1'b1;
-			alusrcb = 2'b10;
+		FETCH2: begin
+			memread <= 1;
+			irwrite <= 4'b0100;
+			alusrcb <= 2'b01;
+			pcwrite <= 1;
 		end
-		6'b100011: begin // LW
-			regwrite = 1'b1;
-			memtoreg = 1'b1;
-			alusrcb = 2'b10;
+		FETCH3: begin
+			memread <= 1;
+			irwrite <= 4'b0010;
+			alusrcb <= 2'b01;
+			pcwrite <= 1;
 		end
-		6'b101011: begin // SW
-			memwrite = 1'b1;
-			alusrcb = 2'b10;
+		FETCH4: begin
+			memread <= 1;
+			irwrite <= 4'b0001;
+			alusrcb <= 2'b01;
+			pcwrite <= 1;
 		end
-		6'b000100: begin // BEQ
-			aluop = 2'b01;
-			pcsource = zero ? 2'b01 : 2'b00;
+		DECODE: alusrcb <= 2'b11;
+		MEMADR: begin
+			alusrca <= 1;
+			alusrcb <= 2'b10;
 		end
-		6'b000010: begin // J
-			pcsource = 2'b10;
+		LBRD: begin
+			memread <= 1;
+			iord    <= 1;
+		end
+		LBWR: begin
+			regwrite <= 1;
+			memtoreg <= 1;
+		end
+		SBWR: begin
+			memwrite <= 1;
+			iord     <= 1;
+		end
+		RTYPEEX: begin
+			alusrca <= 1;
+			aluop   <= 2'b10;
+		end
+		RTYPEWR: begin
+			regdst   <= 1;
+			regwrite <= 1;
+		end
+		BEQEX: begin
+			alusrca     <= 1;
+			aluop       <= 2'b01;
+			pcwritecond <= 1;
+			pcsource    <= 2'b01;
+		end
+		JEX: begin
+			pcwrite  <= 1;
+			pcsource <= 2'b10;
+		end
+		ADDIEX: begin
+			alusrca <= 1;
+			alusrcb <= 2'b10;
+		end
+		ADDIWR: begin
+			regdst   <= 0;
+			regwrite <= 1;
 		end
 	endcase
 end
+assign pcen = pcwrite | (pcwritecond & zero); // program counter enable
 endmodule
 
 /* alucontrol */
@@ -97,87 +209,80 @@ always @(*)
 		2'b00:	alucont <= 3'b010; // add for lb/sb/addi
 		2'b01:	alucont <= 3'b110; // sub (for beq)
 		default: case (funct) // R-Type instructions
-			6'b100000: alucont <= 3'b010; // add
-			6'b100010: alucont <= 3'b110; // subtract
-			6'b100100: alucont <= 3'b000; // logical and
-			6'b100101: alucont <= 3'b001; // logical or
-			6'b101010: alucont <= 3'b111; // set on less
-			default:   alucont <= 3'b010; // default to add
+			6'b100000: alucont <= 3'b010; // add (for add)
+			6'b100010: alucont <= 3'b110; // subtract (for sub)
+			6'b100100: alucont <= 3'b000; // logical and (for and)
+			6'b100101: alucont <= 3'b001; // logical or (for or)
+			6'b101010: alucont <= 3'b111; // set on less (for slt)
+			default:   alucont <= 3'b101; // should never happen
 		endcase
 	endcase
 endmodule
 
-/* simplified datapath */
-module datapath #(parameter WIDTH = 32, REGBITS = 3) (
-input			clk, reset,
-input [WIDTH-1:0]	memdata,
-input			alusrca, memtoreg, iord, pcen, regwrite, regdst,
-input [1:0]		pcsource, alusrcb,
-input [3:0]		irwrite,
-input [2:0]		alucont,
-output			zero,
-output [31:0]		instr,
-output [WIDTH-1:0]	adr, writedata,
-input			memwrite_internal,
-output			memwrite
+/* datapath */
+module datapath #(parameter WIDTH = 8, REGBITS = 3) (
+	input			clk, reset,
+	input [WIDTH-1:0]	memdata,
+	input			alusrca, memtoreg, iord, pcen, regwrite, regdst,
+	input [1:0]		pcsource, alusrcb,
+	input [3:0]		irwrite,
+	input [2:0]		alucont,
+	output			zero,
+	output [31:0]		instr,
+	output [WIDTH-1:0]	adr, writedata
 );
-
-parameter CONST_FOUR = 32'h4;
-
-// PC register and next PC logic
-wire [WIDTH-1:0] pc, nextpc, pcplus4, pcbranch, pcjump;
-flopenr #(WIDTH) pcreg(clk, reset, pcen, nextpc, pc);
-
-// PC+4 calculation
-assign pcplus4 = pc + CONST_FOUR;
-
-// Branch target calculation
-wire [WIDTH-1:0] signext;
-assign signext = {{16{instr[15]}}, instr[15:0]};
-assign pcbranch = pcplus4 + (signext << 2);
-
-// Jump target calculation
-assign pcjump = {pcplus4[31:28], instr[25:0], 2'b00};
-
-// Next PC mux
-mux4 #(WIDTH) pcmux(pcplus4, pcbranch, pcjump, 32'b0, pcsource, nextpc);
-
-// Address mux (PC for instruction fetch, ALU result for data)
-mux2 #(WIDTH) adrmux(pc, aluout, iord, adr);
-
-// Instruction register
-reg [31:0] instreg;
-always @(posedge clk) begin
-	if (reset)
-		instreg <= 32'b0;
-	else if (irwrite[0])
-		instreg <= memdata;
-end
-assign instr = instreg;
-
-// Register file
+// the size of the parameters must be changed to match the WIDTH parameter
+// Modified by Matsutani
+//parameter CONST_ZERO = 8'b0;
+//parameter CONST_ONE = 8'b1;
+parameter CONST_ZERO = 32'b0;
+parameter CONST_ONE = 32'b1;
+parameter CONST_FOUR = 32'b100;
+//
 wire [REGBITS-1:0] ra1, ra2, wa;
-wire [WIDTH-1:0] wd, rd1, rd2;
-assign ra1 = instr[25:21];
-assign ra2 = instr[20:16];
-mux2 #(REGBITS) wamux(instr[20:16], instr[15:11], regdst, wa);
-mux2 #(WIDTH) wdmux(aluout, memdata, memtoreg, wd);
+wire [WIDTH-1:0] pc, nextpc, md, rd1, rd2, wd, a, src1, src2, aluresult,
+			aluout, constx4;
+// shift left constant field by 2
+// Modified by Matsutani
+//assign constx4 = {instr[WIDTH-3:0], 2'b00};
+assign constx4 = {instr[16-3:0], 2'b00};
+//
+// register file address fields
+assign ra1 = instr[REGBITS+20:21];
+assign ra2 = instr[REGBITS+15:16];
+mux2 #(REGBITS) regmux(instr[REGBITS+15:16], instr[REGBITS+10:11], regdst, wa);
+// independent of bit width, 
+// load instruction into four 8-bit registers over four cycles
+// Modified by Matsutani
+//flopen #(8) ir0(clk, irwrite[0], memdata[7:0], instr[7:0]);
+//flopen #(8) ir1(clk, irwrite[1], memdata[7:0], instr[15:8]);
+//flopen #(8) ir2(clk, irwrite[2], memdata[7:0], instr[23:16]);
+//flopen #(8) ir3(clk, irwrite[3], memdata[7:0], instr[31:24]);
+flopen #(32) ir(clk, irwrite[3], memdata[31:0], instr[31:0]);
+//
+// datapath
+flopenr #(WIDTH) pcreg(clk, reset, pcen, nextpc, pc);
+flop #(WIDTH) mdr(clk, memdata, md);
+flop #(WIDTH) areg(clk, rd1, a);
+flop #(WIDTH) wrd(clk, rd2, writedata);
+flop #(WIDTH) res(clk, aluresult, aluout);
+mux2 #(WIDTH) adrmux(pc, aluout, iord, adr);
+mux2 #(WIDTH) src1mux(pc, a, alusrca, src1);
+// Modified by Matsutani
+//mux4 #(WIDTH) src2mux(writedata, CONST_ONE, instr[WIDTH-1:0], constx4, 
+//			alusrcb, src2);
+mux4 #(WIDTH) src2mux(writedata, CONST_FOUR, {{16{instr[15]}}, instr[15:0]},
+			{{16{constx4[15]}}, constx4[15:0]}, alusrcb, src2);
+//
+mux4 #(WIDTH) pcmux(aluresult, aluout, constx4, CONST_ZERO, pcsource, nextpc);
+mux2 #(WIDTH) wdmux(aluout, md, memtoreg, wd);
 regfile #(WIDTH,REGBITS) rf(clk, regwrite, ra1, ra2, wa, wd, rd1, rd2);
-
-// ALU
-wire [WIDTH-1:0] srca, srcb, aluout;
-mux2 #(WIDTH) srcamux(pc, rd1, alusrca, srca);
-mux4 #(WIDTH) srcbmux(rd2, CONST_FOUR, signext, {signext[29:0], 2'b00}, alusrcb, srcb);
-alu #(WIDTH) alunit(srca, srcb, alucont, aluout);
-assign zero = (aluout == 32'b0);
-
-// Output assignments
-assign writedata = rd2;
-assign memwrite = memwrite_internal;
+alu #(WIDTH) alunit(src1, src2, alucont, aluresult);
+zerodetect #(WIDTH) zd(aluresult, zero);
 endmodule
 
 /* alu */
-module alu #(parameter WIDTH = 32) (
+module alu #(parameter WIDTH = 8) (
 	input [WIDTH-1:0]	a, b,
 	input [2:0]		alucont,
 	output reg [WIDTH-1:0]	result
@@ -185,7 +290,8 @@ module alu #(parameter WIDTH = 32) (
 wire [WIDTH-1:0]	b2, sum, slt;
 assign b2 = alucont[2] ? ~b : b; 
 assign sum = a + b2 + alucont[2];
-assign slt = {31'b0, sum[WIDTH-1]};
+// slt should be 1 if most significant bit of sum is 1
+assign slt = sum[WIDTH-1];
 always @(*)
 	case (alucont[1:0])
 		2'b00:	result <= a & b;
@@ -196,7 +302,7 @@ always @(*)
 endmodule
 
 /* regfile */
-module regfile #(parameter WIDTH = 32, REGBITS = 3) (
+module regfile #(parameter WIDTH = 8, REGBITS = 3) (
 	input			clk,
 	input			regwrite,
 	input [REGBITS-1:0]	ra1, ra2, wa,
@@ -204,22 +310,36 @@ module regfile #(parameter WIDTH = 32, REGBITS = 3) (
 	output [WIDTH-1:0]	rd1, rd2
 );
 reg [WIDTH-1:0] RAM [(1<<REGBITS)-1:0];
-
-// Initialize register file
-integer i;
-initial begin
-	for (i = 0; i < (1<<REGBITS); i = i + 1)
-		RAM[i] = 32'b0;
-end
-
+// three ported register file
+// read two ports combinationally
+// write third port on rising edge of clock
+// register 0 hardwired to 0
 always @(posedge clk)
 	if (regwrite) RAM[wa] <= wd;
-assign rd1 = (ra1 != 0) ? RAM[ra1] : 32'b0;
-assign rd2 = (ra2 != 0) ? RAM[ra2] : 32'b0;
+assign rd1 = ra1 ? RAM[ra1] : 0;
+assign rd2 = ra2 ? RAM[ra2] : 0;
+endmodule
+
+/* zerodetect */
+module zerodetect #(parameter WIDTH = 8) (
+	input [WIDTH-1:0]	a,
+	output			y
+);
+assign y = (a == 0);
+endmodule
+
+/* flop */
+module flop #(parameter WIDTH = 8) (
+	input			clk,
+	input [WIDTH-1:0]	d,
+	output reg [WIDTH-1:0]	q
+);
+always @(posedge clk)
+	q <= d;
 endmodule
 
 /* flopen */
-module flopen #(parameter WIDTH = 32) (
+module flopen #(parameter WIDTH = 8) (
 	input			clk, en,
 	input [WIDTH-1:0]	d,
 	output reg [WIDTH-1:0]	q
@@ -229,18 +349,18 @@ always @(posedge clk)
 endmodule
 
 /* flopenr */
-module flopenr #(parameter WIDTH = 32) (
+module flopenr #(parameter WIDTH = 8) (
 	input			clk, reset, en,
 	input [WIDTH-1:0]	d,
 	output reg [WIDTH-1:0]	q
 );
 always @(posedge clk)
-	if (reset) q <= 32'b0;
+	if (reset) q <= 0;
 	else if (en) q <= d;
 endmodule
 
 /* mux2 */
-module mux2 #(parameter WIDTH = 32) (
+module mux2 #(parameter WIDTH = 8) (
 	input [WIDTH-1:0]	d0, d1,
 	input			s,
 	output [WIDTH-1:0]	y
@@ -249,7 +369,7 @@ assign y = s ? d1 : d0;
 endmodule
 
 /* mux4 */
-module mux4 #(parameter WIDTH = 32) (
+module mux4 #(parameter WIDTH = 8) (
 	input [WIDTH-1:0]	d0, d1, d2, d3,
 	input [1:0]		s,
 	output reg [WIDTH-1:0] 	y
