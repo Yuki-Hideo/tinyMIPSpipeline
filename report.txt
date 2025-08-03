@@ -1,49 +1,191 @@
+  tsmc16 pipeline:
+  Point                                                   Incr       Path
+  --------------------------------------------------------------------------
+  clock clk (fall edge)                                   5.00       5.00
+  clock network delay (ideal)                             0.00       5.00
+  dp/rf/rf_reg[31][19]/CPN (DFNQD2BWP16P90LVT)            0.00       5.00 f
+  dp/rf/rf_reg[31][19]/Q (DFNQD2BWP16P90LVT)              0.03 *     5.03 f
+  dp/rf/U2256/ZN (AOI22D1BWP16P90)                        0.01 *     5.05 r
+  dp/rf/U2260/ZN (ND4D1BWP16P90)                          0.03 *     5.08 f
+  dp/rf/U2261/ZN (AOI22D1BWP16P90)                        0.02 *     5.10 r
+  dp/rf/U2265/ZN (ND4D1BWP16P90)                          0.03 *     5.13 f
+  dp/rf/U2277/ZN (IOA21D1BWP16P90)                        0.03 *     5.16 f
+  dp/rf/U595/ZN (INR2D1BWP16P90LVT)                       0.01 *     5.17 f
+  dp/rf/rd1[19] (regfile)                                 0.00       5.17 f
+  dp/forwardadmux/d0[19] (mux2_WIDTH32_3)                 0.00       5.17 f
+  dp/forwardadmux/U16/Z (AO22D1BWP16P90LVT)               0.02 *     5.19 f
+  dp/forwardadmux/y[19] (mux2_WIDTH32_3)                  0.00       5.19 f
+  dp/comp/a[19] (eqcmp)                                   0.00       5.19 f
+  dp/comp/U42/Z (XOR2D1BWP16P90LVT)                       0.02 *     5.21 f
+  dp/comp/U25/ZN (NR4D1BWP16P90LVT)                       0.02 *     5.23 r
+  dp/comp/U35/ZN (ND4D1BWP16P90LVT)                       0.02 *     5.25 f
+  dp/comp/U33/ZN (NR2D1BWP16P90LVT)                       0.02 *     5.26 r
+  dp/comp/eq (eqcmp)                                      0.00       5.26 r
+  dp/equalD (datapath)                                    0.00       5.26 r
+  c/equalD (controller)                                   0.00       5.26 r
+  c/U1/Z (AN2D1BWP16P90LVT)                               0.07 *     5.33 r
+  c/pcsrcD (controller)                                   0.00       5.33 r
+  dp/pcsrcD (datapath)                                    0.00       5.33 r
+  dp/U3/Z (OR2D1BWP16P90LVT)                              0.03 *     5.36 r
+  dp/r2D/clear (flopenrc_WIDTH32)                         0.00       5.36 r
+  dp/r2D/U8/ZN (INR2D1BWP16P90LVT)                        0.05 *     5.41 f
+  dp/r2D/U6/ZN (NR2D1BWP16P90LVT)                         0.10 *     5.51 r
+  dp/r2D/U18/Z (AO22D1BWP16P90LVT)                        0.03 *     5.54 r
+  dp/r2D/q_reg[2]/D (DFCNQD2BWP16P90LVT)                  0.00 *     5.54 r
+  data arrival time                                                  5.54
+
   clock clk (rise edge)                                  10.00      10.00
   clock network delay (ideal)                             0.00      10.00
   clock uncertainty                                      -0.02       9.98
-  dp/pcreg/q_reg[20]/CK (DFF_X1)                          0.00       9.98 r
-  library setup time                                     -0.03 *     9.95
-  data required time                                                 9.95
+  dp/r2D/q_reg[2]/CP (DFCNQD2BWP16P90LVT)                 0.00       9.98 r
+  library setup time                                     -0.01 *     9.97
+  data required time                                                 9.97
   --------------------------------------------------------------------------
-  data required time                                                 9.95
-  data arrival time                                                 -3.81
+  data required time                                                 9.97
+  data arrival time                                                 -5.54
   --------------------------------------------------------------------------
-  slack (MET)                                                        6.14
-
-
-
-  --------------------------------------------------------------------------
-  data required time                                                 9.95
-  data arrival time                                                 -3.81
-  --------------------------------------------------------------------------
-  slack (MET)                                                        6.14
+  slack (MET)                                                        4.43
 
 Reference          Library       Unit Area   Count    Total Area   Attributes
 -----------------------------------------------------------------------------
-CLKBUF_X3          NangateOpenCellLibrary
-                                  1.330000       1      1.330000  
-alucontrol                       13.832000       1     13.832000  h
-controller                       87.248000       1     87.248000  h, n
-datapath_WIDTH32_REGBITS3      3886.525950       1   3886.525950  h, n
+BUFFD4BWP16P90LVT  N16ADFP_StdCelltt0p8v25c_ccs
+                                  0.414720       1      0.414720  
+BUFFD12BWP16P90LVT N16ADFP_StdCelltt0p8v25c_ccs
+                                  0.933120       2      1.866240  
+CKBD1BWP20P90LVT   N16ADFP_StdCelltt0p8v25c_ccs
+                                  0.207360       1      0.207360  
+CKBD8BWP16P90LVT   N16ADFP_StdCelltt0p8v25c_ccs
+                                  0.673920       1      0.673920  
+controller                       21.098881       1     21.098881  h, n
+datapath                       2756.125505       1   2756.125505  h, n
 -----------------------------------------------------------------------------
-Total 4 references                                   3988.935951
+Total 6 references                                   2780.386625
 
-                Internal         Switching           Leakage            Total
+                 Internal         Switching           Leakage            Total
 Power Group      Power            Power               Power              Power   (   %    )  Attrs
 --------------------------------------------------------------------------------------------------
 io_pad             0.0000            0.0000            0.0000            0.0000  (   0.00%)
 memory             0.0000            0.0000            0.0000            0.0000  (   0.00%)
 black_box          0.0000            0.0000            0.0000            0.0000  (   0.00%)
-clock_network    237.1195           83.7498          427.8150          321.2971  (  56.72%)  i
-register          19.5403            8.5482        3.4868e+04           62.9561  (  11.11%)
+clock_network      0.4022        8.1786e-02        2.2232e+03            0.4862  (  83.36%)  i
+register       1.6689e-06        2.2053e-06        5.9235e+04        5.9239e-02  (  10.16%)
 sequential         0.0000            0.0000            0.0000            0.0000  (   0.00%)
-combinational     49.2656           84.3776        4.8519e+04          182.1623  (  32.16%)
+combinational  1.1365e-06        2.6942e-05        3.7812e+04        3.7840e-02  (   6.49%)
 --------------------------------------------------------------------------------------------------
-Total            305.9254 uW       176.6756 uW     8.3814e+04 nW       566.4155 uW
+Total              0.4022 mW     8.1815e-02 mW     9.9270e+04 nW         0.5833 mW
 
 
-tsmc
+tsmc16 simple:
+  Point                                                   Incr       Path
+  --------------------------------------------------------------------------
+  clock clk (rise edge)                                   0.00       0.00
+  clock network delay (ideal)                             0.00       0.00
+  cont/state_reg[1]/CP (DFQD2BWP16P90LVT)                 0.00       0.00 r
+  cont/state_reg[1]/Q (DFQD2BWP16P90LVT)                  0.04 *     0.04 r
+  cont/U29/ZN (CKND1BWP16P90LVT)                          0.02 *     0.05 f
+  cont/U32/ZN (OAI31D1BWP16P90LVT)                        0.13 *     0.19 r
+  cont/alusrca (controller)                               0.00       0.19 r
+  dp/alusrca (datapath_WIDTH32_REGBITS3)                  0.00       0.19 r
+  dp/src1mux/s (mux2_WIDTH32_1)                           0.00       0.19 r
+  dp/src1mux/U1/ZN (CKND1BWP16P90LVT)                     0.13 *     0.32 f
+  dp/src1mux/U4/Z (AO22D1BWP16P90LVT)                     0.04 *     0.36 f
+  dp/src1mux/y[0] (mux2_WIDTH32_1)                        0.00       0.36 f
+  dp/alunit/a[0] (alu_WIDTH32)                            0.00       0.36 f
+  dp/alunit/add_1_root_add_292_2/A[0] (alu_WIDTH32_DW01_add_0)
+                                                          0.00       0.36 f
+  dp/alunit/add_1_root_add_292_2/U1_0/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.39 f
+  dp/alunit/add_1_root_add_292_2/U1_1/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.41 f
+  dp/alunit/add_1_root_add_292_2/U1_2/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.43 f
+  dp/alunit/add_1_root_add_292_2/U1_3/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.46 f
+  dp/alunit/add_1_root_add_292_2/U1_4/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.48 f
+  dp/alunit/add_1_root_add_292_2/U1_5/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.50 f
+  dp/alunit/add_1_root_add_292_2/U1_6/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.52 f
+  dp/alunit/add_1_root_add_292_2/U1_7/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.55 f
+  dp/alunit/add_1_root_add_292_2/U1_8/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.57 f
+  dp/alunit/add_1_root_add_292_2/U1_9/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.59 f
+  dp/alunit/add_1_root_add_292_2/U1_10/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.61 f
+  dp/alunit/add_1_root_add_292_2/U1_11/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.64 f
+  dp/alunit/add_1_root_add_292_2/U1_12/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.66 f
+  dp/alunit/add_1_root_add_292_2/U1_13/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.68 f
+  dp/alunit/add_1_root_add_292_2/U1_14/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.71 f
+  dp/alunit/add_1_root_add_292_2/U1_15/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.73 f
+  dp/alunit/add_1_root_add_292_2/U1_16/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.75 f
+  dp/alunit/add_1_root_add_292_2/U1_17/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.77 f
+  dp/alunit/add_1_root_add_292_2/U1_18/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.80 f
+  dp/alunit/add_1_root_add_292_2/U1_19/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.82 f
+  dp/alunit/add_1_root_add_292_2/U1_20/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.84 f
+  dp/alunit/add_1_root_add_292_2/U1_21/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.86 f
+  dp/alunit/add_1_root_add_292_2/U1_22/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.89 f
+  dp/alunit/add_1_root_add_292_2/U1_23/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.91 f
+  dp/alunit/add_1_root_add_292_2/U1_24/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.93 f
+  dp/alunit/add_1_root_add_292_2/U1_25/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.95 f
+  dp/alunit/add_1_root_add_292_2/U1_26/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     0.97 f
+  dp/alunit/add_1_root_add_292_2/U1_27/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     1.00 f
+  dp/alunit/add_1_root_add_292_2/U1_28/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     1.02 f
+  dp/alunit/add_1_root_add_292_2/U1_29/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     1.04 f
+  dp/alunit/add_1_root_add_292_2/U1_30/CO (FA1D1BWP16P90LVT)
+                                                          0.02 *     1.06 f
+  dp/alunit/add_1_root_add_292_2/U1_31/Z (XOR3D2BWP16P90LVT)
+                                                          0.02 *     1.08 f
+  dp/alunit/add_1_root_add_292_2/SUM[31] (alu_WIDTH32_DW01_add_0)
+                                                          0.00       1.08 f
+  dp/alunit/U45/ZN (ND3D1BWP16P90LVT)                     0.01 *     1.09 r
+  dp/alunit/U41/ZN (OAI211D1BWP16P90LVT)                  0.02 *     1.12 f
+  dp/alunit/result[0] (alu_WIDTH32)                       0.00       1.12 f
+  dp/zd/a[0] (zerodetect_WIDTH32)                         0.00       1.12 f
+  dp/zd/U6/ZN (NR4D1BWP16P90LVT)                          0.02 *     1.13 r
+  dp/zd/U3/ZN (ND4D1BWP16P90LVT)                          0.01 *     1.15 f
+  dp/zd/U2/ZN (NR2D1BWP16P90LVT)                          0.01 *     1.16 r
+  dp/zd/y (zerodetect_WIDTH32)                            0.00       1.16 r
+  dp/zero (datapath_WIDTH32_REGBITS3)                     0.00       1.16 r
+  cont/zero (controller)                                  0.00       1.16 r
+  cont/U26/ZN (AOI21D1BWP16P90LVT)                        0.01 *     1.16 f
+  cont/U25/ZN (ND2D1BWP16P90LVT)                          0.01 *     1.17 r
+  cont/pcen (controller)                                  0.00       1.17 r
+  dp/pcen (datapath_WIDTH32_REGBITS3)                     0.00       1.17 r
+  dp/pcreg/en (flopenr_WIDTH32)                           0.00       1.17 r
+  dp/pcreg/U8/ZN (INR2D1BWP16P90LVT)                      0.10 *     1.27 r
+  dp/pcreg/U6/ZN (NR2D1BWP16P90LVT)                       0.11 *     1.38 f
+  dp/pcreg/U18/Z (AO22D1BWP16P90LVT)                      0.03 *     1.41 f
+  dp/pcreg/q_reg[9]/D (DFQD2BWP16P90LVT)                  0.00 *     1.41 f
+  data arrival time                                                  1.41
 
+  clock clk (rise edge)                                  10.00      10.00
+  clock network delay (ideal)                             0.00      10.00
+  clock uncertainty                                      -0.02       9.98
+  dp/pcreg/q_reg[9]/CP (DFQD2BWP16P90LVT)                 0.00       9.98 r
+  library setup time                                      0.00 *     9.98
+  data required time                                                 9.98
   --------------------------------------------------------------------------
   data required time                                                 9.98
   data arrival time                                                 -1.41
@@ -64,30 +206,15 @@ datapath_WIDTH32_REGBITS3       886.619538       1    886.619538  h, n
 -----------------------------------------------------------------------------
 Total 5 references                                    912.072978
 
-
                  Internal         Switching           Leakage            Total
 Power Group      Power            Power               Power              Power   (   %    )  Attrs
 --------------------------------------------------------------------------------------------------
 io_pad             0.0000            0.0000            0.0000            0.0000  (   0.00%)
 memory             0.0000            0.0000            0.0000            0.0000  (   0.00%)
 black_box          0.0000            0.0000            0.0000            0.0000  (   0.00%)
-clock_network      0.1245        2.5810e-02          706.8784            0.1511  (  65.04%)  i
-register       5.7819e-03        2.2347e-03        1.9220e+04        2.7236e-02  (  11.73%)
+clock_network      0.1244        2.5849e-02          706.8986            0.1510  (  81.30%)  i
+register       8.4937e-07        4.1889e-07        1.9588e+04        1.9590e-02  (  10.55%)
 sequential         0.0000            0.0000            0.0000            0.0000  (   0.00%)
-combinational  1.7101e-02        2.1852e-02        1.5020e+04        5.3973e-02  (  23.24%)
+combinational  4.1240e-06        1.4558e-05        1.5119e+04        1.5138e-02  (   8.15%)
 --------------------------------------------------------------------------------------------------
-Total              0.1474 mW     4.9897e-02 mW     3.4946e+04 nW         0.2323 mW
-
-
-  clock clk (rise edge)                                  10.00      10.00
-  clock network delay (ideal)                             0.00      10.00
-  clock uncertainty                                      -0.02       9.98
-  dp/pcreg/q_reg[9]/CP (DFQD2BWP16P90LVT)                 0.00       9.98 r
-  library setup time                                      0.00 *     9.98
-  data required time                                                 9.98
-  --------------------------------------------------------------------------
-  data required time                                                 9.98
-  data arrival time                                                 -1.41
-  --------------------------------------------------------------------------
-  slack (MET)                                                        8.57
-
+Total              0.1244 mW     2.5864e-02 mW     3.5415e+04 nW         0.1857 mW

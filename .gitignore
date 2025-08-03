@@ -1,5 +1,5 @@
 *.vcd
-*.log
+*.log*
 *.logv
 *.out
 *.tb
@@ -23,7 +23,7 @@ test
 *.bin
 *.X
 *.zip
-*.cmd
+*.cmd*
 *.pl
 
 # Cadence/Innovus/Design Compiler等
