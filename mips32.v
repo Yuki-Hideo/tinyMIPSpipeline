@@ -335,7 +335,7 @@ module adder(
 	assign #1 y = a + b;
 endmodule
 
-module eqnmp(
+module eqcmp(
 	input	[31:0] a, b,
 	output	eq
 );
@@ -372,6 +372,17 @@ module flopr #(parameter WIDTH = 8) (
 		else	q <= #1 d;
 	end
 endmodule	
+
+module floprc #(parameter WIDTH = 8)
+              (input                  clk, reset, clear,
+               input      [WIDTH-1:0] d, 
+               output reg [WIDTH-1:0] q);
+
+  always @(posedge clk, posedge reset)
+    if (reset)      q <= #1 0;
+    else if (clear) q <= #1 0;
+    else            q <= #1 d;
+endmodule
 
 //　イネーブル付きフリップフロップ
 module flopenr #(parameter WIDTH = 8)(
