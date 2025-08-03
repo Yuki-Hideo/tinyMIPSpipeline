@@ -15,15 +15,16 @@ module top #(parameter WIDTH = 32, REGBITS = 3) ();
 reg			clk;
 reg			reset;
 wire			memread, memwrite;
-wire [WIDTH-1:0]	adr, writedata;
-wire [WIDTH-1:0]	memdata;
+wire [WIDTH-1:0]	adr, writedata, memdata;
+wire [31:0] pc, instr;
 // 10nsec --> 100MHz
 parameter STEP = 10.0;
-// instantiate devices to be tested
-//mips #(WIDTH, REGBITS) dut(clk, reset, memdata, memread, memwrite, adr, writedata);
-mips32 dut(clk, reset, memdata, memread, memwrite, adr, writedata);
-// external memory for code and data
-exmemory #(WIDTH) exmem(clk, memwrite, adr, writedata, memdata);
+integer cycles;
+// instantiate devices to be tested - パイプライン版mips32に対応
+mips32 dut(clk, reset, pc, instr, memwrite, adr, writedata, memdata);
+// 命令メモリとデータメモリを分離
+imem imem(pc[7:2], instr);
+dmem dmem(clk, memwrite, adr, writedata, memdata);
 // initialize test
 initial begin
 `ifdef __POST_PR__
@@ -33,16 +34,19 @@ initial begin
 	$dumpfile("dump.vcd");
 	$dumpvars(0, top.dut);
 	// reset
-	clk <= 0; reset <= 1; # 22; reset <= 0;
+	clk <= 0; reset <= 1; cycles = 0; # 22; reset <= 0;
 	// stop at 1,000 cycles
 	#(STEP*1000);
-	$display("Simulation failed");
+	$display("Simulation failed (timeout)");
+	$display("Executed cycles: %d", cycles);
+	$display("Simulation time: %t", $time);
 	$finish;
 end
 // generate clock to sequence tests
 always #(STEP / 2)
 	clk <= ~clk;
 always @(negedge clk) begin
+	cycles = cycles + 1;
 	if (memwrite) begin
 		$display("Data [%d] is stored in Address [%d]", writedata, adr);
 		// Modified by Matsutani
@@ -52,53 +56,40 @@ always @(negedge clk) begin
 			$display("Simulation completely successful");
 		else
 			$display("Simulation failed");
+		$display("Executed cycles: %d", cycles);
+		$display("Simulation time: %t", $time);
 		$finish;
 	end
 end
 endmodule
 
 /* external memory accessed by MIPS */
-module exmemory #(parameter WIDTH = 8) (
-	input			clk,
-	input			memwrite,
-	input [WIDTH-1:0]	adr, writedata,
-	output reg [WIDTH-1:0]	memdata
+module imem(
+	input [5:0] a,
+	output [31:0] rd
 );
-// Modified by Matsutani
-//reg [31:0]	RAM [(1<<WIDTH-2)-1:0];
-reg [31:0]	RAM [255:0];
-//
-wire [31:0]	word;
-//integer	i;
-initial begin
-	// Modified by Matsutani
-	//for (i = 0; i < (1<<WIDTH-2); i = i + 1)
-	//	RAM[i] = 0;
-	//$readmemh("mipstest.dat", RAM);
-	$readmemh("sum32.dat", RAM);
-	//
-end
-// read and write bytes from 32-bit word
-always @(posedge clk)
-	if (memwrite) 
-		// Modified by Matsutani
-		//case (adr[1:0])
-		//	2'b00: RAM[adr>>2][31:24]   <= writedata;
-		//	2'b01: RAM[adr>>2][23:16]  <= writedata;
-		//	2'b10: RAM[adr>>2][15:8] <= writedata;
-		//	2'b11: RAM[adr>>2][7:0] <= writedata;
-		//endcase
-		RAM[adr>>2][31:0] <= writedata;
-		//
-assign word = RAM[adr>>2];
-always @(*)
-	// Modified by Matsutani
-	//case (adr[1:0])
-	//	2'b00: memdata <= word[31:24];
-	//	2'b01: memdata <= word[23:16];
-	//	2'b10: memdata <= word[15:8];
-	//	2'b11: memdata <= word[7:0];
-	//endcase
-	memdata <= word[31:0];
-	//
+	reg [31:0] RAM[63:0];
+
+	initial
+		begin
+			$readmemh("sum32.dat", RAM);
+		end
+
+	assign rd = RAM[a]; // 先頭６ビットを読む(オペコード)
+endmodule
+
+module dmem(
+	input clk, we,
+	input [31:0] a, wd,
+	output [31:0] rd
+);
+	reg [31:0] RAM[63:0];
+	
+	assign rd = RAM[a[31:2]]; // ワードを読み込む(アドレスの上位３０ビットを使用（ワードアラインメント)
+
+	always @(posedge clk) begin
+		if (we) begin
+			RAM[a[31:2]] <= wd; // クロック立ち上がりでwrite enableのときにワードを書き込む
+		end
+	end
 endmodule

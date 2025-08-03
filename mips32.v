@@ -1,44 +1,4 @@
-module top(
-	input clk, reset, 
-	output [31:0] writedata, dataadr,
-	output memwrite
-);
-	wire [31:0] pc, instr, readdata;
-
-	mips mips(clk, reset, pc, instr, memwrite, dataadr, writedata, readdata);
-	imem imem(pc[7:2], instr);
-	dmem dmem(clk, memwrite, dataadr, writedata, readdata);
-endmodule
-
-module dmem(
-	input clk, we,
-	input [31:0] a, wd,
-	output [31:0] rd
-);
-	reg [31:0] RAM[63:0];
-	
-	assign rd = RAM[a[31:2]]; // ワードを読み込む(アドレスの上位３０ビットを使用（ワードアラインメント)
-
-	always @(posedge clk) begin
-		if (we) begin
-			RAM[a[31:2]] <= wd; // クロック立ち上がりでwrite enableのときにワードを書き込む
-		end
-	end
-endmodule
-
-module imem(
-	input [5:0] a,
-	output [31:0] rd
-);
-	reg [31:0] RAM[63:0];
-
-	initial
-		begin
-			$readmemh("memfile.dat", RAM);
-		end
-
-	assign rd = RAM[a]; // 先頭６ビットを読む(オペコード)
-endmodule
+// top, imem, dmem modules removed to avoid conflict with sum32.v testbench
 
 
 module mips32(
@@ -392,7 +352,7 @@ endmodule
 
 module signext(
 	input	[15:0] a,
-	output	[15:0] y
+	output	[31:0] y
 );
 	// 符号拡張
 	assign #1 y = {{16{a[15]}}, a};
@@ -455,7 +415,7 @@ endmodule
 // 3入力
 module mux3 #(parameter WIDTH = 8) (
 	input	[WIDTH-1:0] d0, d1, d2,
-	input	s,
+	input	[1:0] s,
 	output	[WIDTH-1:0] y
 );
 	assign #1 y = s[1] ? d2 : (s[0] ? d1 : d0);
